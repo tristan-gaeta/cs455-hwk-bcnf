@@ -1,12 +1,15 @@
+import java.util.HashSet;
 import java.util.Set;
 
 /**
  * This class provides static methods for performing normalization
  * 
- * @author <YOUR NAME>
- * @version <DATE>
+ * @author Tristan Gaeta
+ * @version 11-22
  */
 public class Normalizer {
+
+  private static FD violator;
 
   /**
    * Performs BCNF decomposition
@@ -16,23 +19,48 @@ public class Normalizer {
    * @return a set of relations (as attribute sets) that are in BCNF
    */
   public static Set<Set<String>> BCNFDecompose(Set<String> rel, FDSet fdset) {
-    // TODO - First test if the given relation is already in BCNF with respect to
-    // the provided FD set.
+    System.out.println("Current Schema: "+rel);
+    System.out.println("Current Schema's Super Keys: "+findSuperkeys(rel, fdset));
+    Set<Set<String>> output = new HashSet<>();
+    if (isBCNF(rel, fdset)){
+      output.add(rel);
+      return output;
+    }
 
-    // TODO - Identify a nontrivial FD that violates BCNF. Split the relation's
-    // attributes using that FD, as seen in class.
+    System.out.println("*** Splitting on "+violator+" ***");
+    // new relations
+    Set<String> r1 = new HashSet<>();
+    r1.addAll(violator.getLeft());
+    r1.addAll(violator.getRight());
 
-    // TODO - Redistribute the FDs in the closure of fdset to the two new
-    // relations (R_Left and R_Right) as follows:
-    //
-    // Iterate through closure of the given set of FDs, then union all attributes
-    // appearing in the FD, and test if the union is a subset of the R_Left (or
-    // R_Right) relation. If so, then the FD gets added to the R_Left's (or R_Right's) FD
-    // set. If the union is not a subset of either new relation, then the FD is
-    // discarded
+    Set<String> r2 = new HashSet<>(rel);
+    r2.removeAll(violator.getRight());
+    r2.addAll(violator.getLeft());
+    // new fd sets
 
-    // Repeat the above until all relations are in BCNF
-    return null;
+    FDSet d1 = new FDSet();
+    FDSet d2 = new FDSet();
+    Set<String> attributes = new HashSet<>();
+    FDSet closure = FDUtil.fdSetClosure(fdset);
+    for (FD fd: closure){
+      attributes.clear();
+      attributes.addAll(fd.getLeft());
+      attributes.addAll(fd.getRight());
+      if (r1.containsAll(attributes)){
+        d1.add(fd);
+      } else if(r2.containsAll(attributes))  {
+        d2.add(fd);
+      }
+    }
+
+    System.out.println("Left Schema: "+r1);
+    System.out.println("Left Schema's Super Keys: "+findSuperkeys(r1, d1));
+    output.addAll(BCNFDecompose(r1, d1));
+
+    System.out.println("Right Schema: "+r2);
+    System.out.println("Right Schema's Super Keys: "+findSuperkeys(r2, d2)+"\n\n");
+    output.addAll(BCNFDecompose(r2, d2));
+    return output;
   }
 
   /**
@@ -44,8 +72,15 @@ public class Normalizer {
    * @return true if the relation is in BCNF with respect to the specified FD set
    */
   public static boolean isBCNF(Set<String> rel, FDSet fdset) {
-    // TODO
-    return false;
+    Set<Set<String>> keys = findSuperkeys(rel, fdset);
+    System.out.println(keys);
+    for (FD fd: fdset){
+      if (!fd.isTrivial() && !keys.contains(fd.getLeft())){
+        violator = new FD(fd);
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -56,12 +91,30 @@ public class Normalizer {
    * @return a set of super keys
    */
   public static Set<Set<String>> findSuperkeys(Set<String> rel, FDSet fdset) {
-    // TODO - sanity check: are all the attributes in the FD set even in the
-    // relation? Throw an IllegalArgumentException if not.
+    // check for valid input
+    for (FD fd: fdset){
+      if (!rel.containsAll(fd.getLeft()) || ! rel.containsAll(fd.getRight()))
+        throw new IllegalArgumentException("The following FD refers to unknown attributes: "+fd);
+    }
 
-    // TODO - iterate through each subset of the relation's attributes, and test
-    // the attribute closure of each subset
-    return null;
+    // loop through power set
+    Set<Set<String>> output = new HashSet<>();
+    Set<String> attributes = new HashSet<>();
+    for (Set<String> subset : FDUtil.powerSet(rel)) {
+      attributes.clear();
+      attributes.addAll(subset);
+      boolean changed;
+      do {
+        changed = false;
+        for (FD fd : fdset) {
+          if (attributes.containsAll(fd.getLeft()))
+            changed |= attributes.addAll(fd.getRight());
+        }
+      } while (changed);
+      if (attributes.containsAll(rel))
+        output.add(subset);
+    }
+    return output;
   }
 
 }

@@ -1,1 +1,1 @@
-# cs455-hwk-bcnf
+This java program will attempt to decompose a data base schema into Boyce Codd Normal Form.
